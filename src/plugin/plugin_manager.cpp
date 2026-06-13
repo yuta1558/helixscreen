@@ -6,6 +6,7 @@
 #include "config.h"
 #include "helix_version.h"
 #include "injection_point_manager.h"
+#include "ui_update_queue.h"
 #include "version.h"
 
 #include <spdlog/fmt/fmt.h>
@@ -349,9 +350,19 @@ bool PluginManager::unload_plugin(const std::string& plugin_id) {
         loaded.api->cleanup();
     }
 
-    // Close library
-    if (loaded.handle != nullptr) {
-        dlclose(loaded.handle);
+    // Drain the UpdateQueue BEFORE dlclose: queued lambdas may hold
+    // std::functions whose code (invoke + destroy) lives in the plugin .so.
+    // Executing or even just destroying them after dlclose is a SIGSEGV in
+    // unmapped memory. cleanup() flipped the alive flag, so drained plugin
+    // callbacks are no-ops; the freeze closes the BG-thread enqueue race.
+    {
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        helix::ui::UpdateQueue::instance().drain();
+
+        // Close library while still frozen
+        if (loaded.handle != nullptr) {
+            dlclose(loaded.handle);
+        }
     }
 
     // Update discovered state

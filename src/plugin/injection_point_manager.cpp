@@ -152,27 +152,40 @@ bool InjectionPointManager::inject_widget(const std::string& plugin_id, const st
 }
 
 void InjectionPointManager::remove_plugin_widgets(const std::string& plugin_id) {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    // Collect widgets to remove (can't modify while iterating)
+    // Collect entries and erase them from the tracking list under the lock,
+    // then invoke on_destroy outside the lock to prevent deadlock if a plugin
+    // callback re-enters any InjectionPointManager method.
     std::vector<InjectedWidget> to_remove;
-    for (const auto& injected : injected_widgets_) {
-        if (injected.plugin_id == plugin_id) {
-            to_remove.push_back(injected);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        for (const auto& injected : injected_widgets_) {
+            if (injected.plugin_id == plugin_id) {
+                to_remove.push_back(injected);
+            }
+        }
+
+        if (to_remove.empty()) {
+            spdlog::debug("[InjectionPointManager] No widgets to remove for plugin '{}'", plugin_id);
+            return;
+        }
+
+        spdlog::info("[InjectionPointManager] Removing {} widget(s) for plugin '{}'",
+                     to_remove.size(), plugin_id);
+
+        // Erase from tracking list before releasing the lock
+        auto it = injected_widgets_.begin();
+        while (it != injected_widgets_.end()) {
+            if (it->plugin_id == plugin_id) {
+                it = injected_widgets_.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 
-    if (to_remove.empty()) {
-        spdlog::debug("[InjectionPointManager] No widgets to remove for plugin '{}'", plugin_id);
-        return;
-    }
-
-    spdlog::info("[InjectionPointManager] Removing {} widget(s) for plugin '{}'", to_remove.size(),
-                 plugin_id);
-
-    // Remove each widget
+    // Invoke on_destroy and delete widgets outside the lock
     for (const auto& injected : to_remove) {
-        // Invoke on_destroy callback BEFORE deleting widget
         if (injected.callbacks.on_destroy && injected.widget != nullptr) {
             try {
                 injected.callbacks.on_destroy(injected.widget);
@@ -191,33 +204,32 @@ void InjectionPointManager::remove_plugin_widgets(const std::string& plugin_id) 
                           injected.component_name, injected.injection_point);
         }
     }
-
-    // Remove from tracking list
-    auto it = injected_widgets_.begin();
-    while (it != injected_widgets_.end()) {
-        if (it->plugin_id == plugin_id) {
-            it = injected_widgets_.erase(it);
-        } else {
-            ++it;
-        }
-    }
 }
 
 bool InjectionPointManager::remove_widget(lv_obj_t* widget) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    // Find the entry, copy it, and erase it from the tracking list under the
+    // lock, then invoke on_destroy outside the lock to prevent deadlock if a
+    // plugin callback re-enters any InjectionPointManager method.
+    InjectedWidget entry;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    auto it = std::find_if(injected_widgets_.begin(), injected_widgets_.end(),
-                           [widget](const InjectedWidget& w) { return w.widget == widget; });
+        auto it = std::find_if(injected_widgets_.begin(), injected_widgets_.end(),
+                               [widget](const InjectedWidget& w) { return w.widget == widget; });
 
-    if (it == injected_widgets_.end()) {
-        spdlog::debug("[InjectionPointManager] Widget not found in tracking list");
-        return false;
+        if (it == injected_widgets_.end()) {
+            spdlog::debug("[InjectionPointManager] Widget not found in tracking list");
+            return false;
+        }
+
+        entry = *it;
+        injected_widgets_.erase(it);
     }
 
-    // Invoke on_destroy callback
-    if (it->callbacks.on_destroy && widget != nullptr) {
+    // Invoke on_destroy callback outside the lock
+    if (entry.callbacks.on_destroy && widget != nullptr) {
         try {
-            it->callbacks.on_destroy(widget);
+            entry.callbacks.on_destroy(widget);
         } catch (const std::exception& e) {
             spdlog::error("[InjectionPointManager] on_destroy callback threw exception: {}",
                           e.what());
@@ -227,12 +239,8 @@ bool InjectionPointManager::remove_widget(lv_obj_t* widget) {
     // Delete the widget
     helix::ui::safe_delete(widget);
 
-    std::string component = it->component_name;
-    std::string point = it->injection_point;
-
-    injected_widgets_.erase(it);
-
-    spdlog::debug("[InjectionPointManager] Removed widget '{}' from point '{}'", component, point);
+    spdlog::debug("[InjectionPointManager] Removed widget '{}' from point '{}'",
+                  entry.component_name, entry.injection_point);
     return true;
 }
 

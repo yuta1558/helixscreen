@@ -121,7 +121,14 @@ class MdnsDiscovery::Impl {
         // Start discovery thread
         running_.store(true);
         initial_update_sent_.store(false); // Reset so first query dispatches even if empty
-        thread_ = std::thread(&Impl::discovery_loop, this);
+        try {
+            thread_ = std::thread(&Impl::discovery_loop, this);
+        } catch (const std::system_error& e) {
+            running_.store(false);
+            spdlog::error("[MdnsDiscovery] Failed to start discovery thread ({}): {}",
+                          e.code().value(), e.what());
+            return;
+        }
         spdlog::info("[MdnsDiscovery] Started discovery for {}", service_type_);
     }
 

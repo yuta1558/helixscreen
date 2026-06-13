@@ -79,6 +79,12 @@ void MoonrakerFileTransferAPI::download_file_partial(const std::string& root,
     if (reject_invalid_path(path, "download_file_partial", on_error))
         return;
 
+    if (max_bytes == 0) {
+        spdlog::error("[Moonraker API] download_file_partial: max_bytes must be > 0");
+        report_connection_error(on_error, "download_file_partial", "max_bytes must be > 0");
+        return;
+    }
+
     if (http_base_url_.empty()) {
         spdlog::error(
             "[Moonraker API] HTTP base URL not configured - call set_http_base_url first");

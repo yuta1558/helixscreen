@@ -62,8 +62,12 @@ lv_color_t lv_xml_to_color(const char * str)
 
 lv_opa_t lv_xml_to_opa(const char * str)
 {
-    int32_t v = lv_xml_atoi(str);
     size_t len = lv_strlen(str);
+    if(len == 0) {
+        LV_LOG_WARN("lv_xml_to_opa: empty string, returning LV_OPA_COVER");
+        return LV_OPA_COVER;
+    }
+    int32_t v = lv_xml_atoi(str);
     if(str[len - 1] == '%') {
         v = v * 255 / 100;
     }

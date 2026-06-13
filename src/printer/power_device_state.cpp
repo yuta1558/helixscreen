@@ -179,7 +179,8 @@ void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
         return;
 
     for (const auto& param : msg["params"]) {
-        if (!param.is_object() || !param.contains("device") || !param.contains("status")) {
+        if (!param.is_object() || !param.contains("device") || !param.contains("status") ||
+            !param["device"].is_string() || !param["status"].is_string()) {
             continue;
         }
 

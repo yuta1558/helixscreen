@@ -47,22 +47,37 @@ void GCodeObjectThumbnailRenderer::render_async(const ParsedGCodeFile* gcode, in
     cancel_.store(false, std::memory_order_relaxed);
     rendering_.store(true, std::memory_order_relaxed);
 
-    thread_ =
-        std::thread([this, gcode, thumb_width, thumb_height, color, cb = std::move(callback)]() {
-            auto result = render_impl(gcode, thumb_width, thumb_height, color);
+    // Keep a copy of the callback so we can invoke it on thread-spawn failure
+    // without relying on callback's state after it may have been moved into the
+    // thread lambda.
+    ThumbnailCompleteCallback fail_cb = callback;
+    try {
+        thread_ =
+            std::thread([this, gcode, thumb_width, thumb_height, color, cb = std::move(callback)]() {
+                auto result = render_impl(gcode, thumb_width, thumb_height, color);
 
-            rendering_.store(false, std::memory_order_relaxed);
+                rendering_.store(false, std::memory_order_relaxed);
 
-            if (!cancel_.load(std::memory_order_relaxed) && cb) {
-                // Marshal result to UI thread. Use shared_ptr for lambda capture so the
-                // ObjectThumbnailSet is freed even if the UI queue is drained on shutdown
-                // before this lambda runs (std::function requires copyable lambdas).
-                auto shared = std::shared_ptr<ObjectThumbnailSet>(result.release());
-                helix::ui::queue_update([cb, shared]() {
-                    cb(std::make_unique<ObjectThumbnailSet>(std::move(*shared)));
-                });
-            }
-        });
+                if (!cancel_.load(std::memory_order_relaxed) && cb) {
+                    // Marshal result to UI thread. Use shared_ptr for lambda capture so the
+                    // ObjectThumbnailSet is freed even if the UI queue is drained on shutdown
+                    // before this lambda runs (std::function requires copyable lambdas).
+                    auto shared = std::shared_ptr<ObjectThumbnailSet>(result.release());
+                    helix::ui::queue_update([cb, shared]() {
+                        cb(std::make_unique<ObjectThumbnailSet>(std::move(*shared)));
+                    });
+                }
+            });
+    } catch (const std::system_error& e) {
+        spdlog::error("[ObjectThumbnail] Failed to start render thread: {}", e.what());
+        rendering_.store(false, std::memory_order_relaxed);
+        cancel_.store(false, std::memory_order_relaxed);
+        if (fail_cb) {
+            helix::ui::queue_update([cb = std::move(fail_cb)]() {
+                cb(std::make_unique<ObjectThumbnailSet>());
+            });
+        }
+    }
 }
 
 std::unique_ptr<ObjectThumbnailSet>

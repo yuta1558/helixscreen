@@ -100,7 +100,10 @@ class PowerDeviceWidget : public PanelWidget {
     void select_icon(const std::string& name);
     void save_config();
     void setup_carousel();
-    void teardown_carousel();
+    // deferred_delete: pass true when called from inside an UpdateQueue batch
+    // (e.g., lifetime_.defer or tok.defer) so the carousel object is removed via
+    // safe_delete_deferred instead of the banned synchronous lv_obj_delete.
+    void teardown_carousel(bool deferred_delete = false);
     void attach_sensor_observers();
     void detach_sensor_observers();
     void update_energy_label(const std::string& key, lv_obj_t* label, int centi_value);

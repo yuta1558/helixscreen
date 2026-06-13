@@ -494,10 +494,20 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
     if(test.processing_steps == 0) return;
 
     if(lv_streq(name, "click_at")) {
-        test.step_cnt++;
         const char * x = lv_xml_get_value_of(attrs, "x");
         const char * y = lv_xml_get_value_of(attrs, "y");
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(x == NULL || y == NULL) {
+            LV_LOG_WARN("'x' or 'y' is missing from click_at step");
+            return;
+        }
+        test.step_cnt++;
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for click_at");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_CLICK_AT;
         test.steps[idx].param.mouse_pos.x = lv_xml_atoi(x);
@@ -511,17 +521,33 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
         }
 
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for click_on");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_CLICK_ON;
         test.steps[idx].param.str = lv_strdup(obj_name);
         LV_ASSERT_MALLOC(test.steps[idx].param.str);
     }
     else if(lv_streq(name, "move_to")) {
-        test.step_cnt++;
         const char * x = lv_xml_get_value_of(attrs, "x");
         const char * y = lv_xml_get_value_of(attrs, "y");
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(x == NULL || y == NULL) {
+            LV_LOG_WARN("'x' or 'y' is missing from move_to step");
+            return;
+        }
+        test.step_cnt++;
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for move_to");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_MOVE_TO;
         test.steps[idx].param.mouse_pos.x = lv_xml_atoi(x);
@@ -529,20 +555,42 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
     }
     else if(lv_streq(name, "press")) {
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for press");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_PRESS;
     }
     else if(lv_streq(name, "release")) {
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for release");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_RELEASE;
     }
     else if(lv_streq(name, "screenshot_compare")) {
-        test.step_cnt++;
         const char * path = lv_xml_get_value_of(attrs, "path");
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(path == NULL) {
+            LV_LOG_WARN("'path' is missing from screenshot_compare step");
+            return;
+        }
+        test.step_cnt++;
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for screenshot_compare");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_SCREENSHOT_COMPARE;
 
@@ -552,17 +600,37 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
         test.steps[idx].param.screenshot_compare.path = lv_strdup(buf);
     }
     else if(lv_streq(name, "wait")) {
-        test.step_cnt++;
         const char * ms = lv_xml_get_value_of(attrs, "ms");
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(ms == NULL) {
+            LV_LOG_WARN("'ms' is missing from wait step");
+            return;
+        }
+        test.step_cnt++;
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for wait");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_WAIT;
         test.steps[idx].param.wait.ms = lv_xml_atoi(ms);
     }
     else if(lv_streq(name, "freeze")) {
-        test.step_cnt++;
         const char * ms = lv_xml_get_value_of(attrs, "ms");
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(ms == NULL) {
+            LV_LOG_WARN("'ms' is missing from freeze step");
+            return;
+        }
+        test.step_cnt++;
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for freeze");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_FREEZE;
         test.steps[idx].param.freeze.ms = lv_xml_atoi(ms);
@@ -581,7 +649,13 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
         }
 
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for subject_set");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_SUBJECT_SET;
         test.steps[idx].param.subject_set.subject = subject;
@@ -601,7 +675,13 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
         }
 
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for subject_compare");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_SUBJECT_COMPARE;
         test.steps[idx].param.subject_compare.subject = subject;
@@ -615,7 +695,13 @@ static void start_metadata_handler(void * user_data, const char * name, const ch
         }
 
         test.step_cnt++;
-        test.steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        lv_xml_test_step_t * new_steps = lv_realloc(test.steps, sizeof(lv_xml_test_step_t) * test.step_cnt);
+        if(new_steps == NULL) {
+            LV_LOG_ERROR("OOM: failed to grow test steps for set_language");
+            test.step_cnt--;
+            return;
+        }
+        test.steps = new_steps;
         uint32_t idx = test.step_cnt - 1;
         test.steps[idx].type = LV_XML_TEST_STEP_TYPE_SET_LANGUAGE;
         test.steps[idx].param.str = lv_strdup(obj_name);

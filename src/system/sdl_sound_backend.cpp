@@ -148,6 +148,15 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
     auto* out = reinterpret_cast<float*>(stream);
     int num_samples = len / static_cast<int>(sizeof(float));
 
+    // Guard against SDL delivering a larger buffer than mix_buf_ was sized for.
+    // Clamp and zero any trailing bytes so the output is silence for those samples
+    // rather than a heap overwrite. Heap allocation in an RT callback is avoided
+    // intentionally — mix_buf_ is sized from obtained.samples in initialize().
+    if (static_cast<size_t>(num_samples) > self->mix_buf_.size()) {
+        std::memset(stream, 0, static_cast<size_t>(len));
+        num_samples = static_cast<int>(self->mix_buf_.size());
+    }
+
     auto* mix = self->mix_buf_.data();
     std::memset(mix, 0, num_samples * sizeof(float));
     bool has_audio = false;

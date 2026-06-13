@@ -210,7 +210,16 @@ bool MoonrakerRequestTracker::route_response(
         }
 
         if (error_cb) {
-            error_cb(error);
+            try {
+                error_cb(error);
+            } catch (const std::exception& e) {
+                spdlog::error(
+                    "[INTERNAL] [Request Tracker] Error callback for '{}' threw exception: {}",
+                    method_name, e.what());
+                // Do NOT re-throw: stack unwinding between here and the outer
+                // handler can leave libhv's event loop in a corrupt state,
+                // leading to SIGSEGV on the next message cycle.
+            }
         }
     } else if (success_cb) {
         try {

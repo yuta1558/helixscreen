@@ -223,11 +223,13 @@ void HardwareValidator::save_session_snapshot(Config* config,
     // Create current snapshot using the hardware discovery
     auto snapshot = create_snapshot(hardware);
 
-    // Generate ISO 8601 timestamp
+    // Generate ISO 8601 timestamp (gmtime_r: thread-safe, no shared static buffer)
     auto now = std::chrono::system_clock::now();
     auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_buf{};
+    gmtime_r(&time_t_now, &tm_buf);
     std::stringstream ss;
-    ss << std::put_time(std::gmtime(&time_t_now), "%Y-%m-%dT%H:%M:%SZ");
+    ss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%SZ");
     snapshot.timestamp = ss.str();
 
     // Save to config

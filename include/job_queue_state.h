@@ -50,7 +50,7 @@ class JobQueueState {
     void init_subjects();
 
   private:
-    void on_queue_fetched(const JobQueueStatus& status);
+    void on_queue_fetched(const JobQueueStatus& status, const helix::LifetimeToken& token);
     void subscribe_to_notifications();
     void update_subjects();
     void deinit_subjects();

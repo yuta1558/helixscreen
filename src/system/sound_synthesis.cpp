@@ -27,6 +27,10 @@ FilterType filter_type_from_string(const std::string& type) {
 void generate_samples(float* buffer, int num_samples, int sample_rate,
                       Waveform wave, float freq, float amplitude,
                       float duty_cycle, float& phase) {
+    if (sample_rate <= 0) {
+        std::fill(buffer, buffer + num_samples, 0.0f);
+        return;
+    }
     const float phase_inc = freq / static_cast<float>(sample_rate);
 
     for (int i = 0; i < num_samples; ++i) {
@@ -59,6 +63,11 @@ void generate_samples(float* buffer, int num_samples, int sample_rate,
 
 void compute_biquad_coeffs(BiquadFilter& f, FilterType type, float cutoff,
                            float sample_rate) {
+    if (sample_rate <= 0.0f) {
+        // No valid sample rate yet — leave coefficients unchanged to avoid
+        // inf/NaN propagating into the filter state.
+        return;
+    }
     constexpr float Q = 0.707107f; // 1/sqrt(2), Butterworth
 
     // Clamp cutoff to valid range (above 0, below Nyquist)
