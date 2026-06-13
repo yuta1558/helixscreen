@@ -234,8 +234,12 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: get() with missing key throws excep
                  "[core][config][get]") {
     setup_default_config();
 
+    // get<T>() reads via const .at(), which throws out_of_range (403) for a
+    // missing key instead of inserting a null node into the document and then
+    // failing the type conversion. out_of_range is the semantically correct
+    // "key not found" exception.
     REQUIRE_THROWS_AS(config.get<std::string>(config.df() + "nonexistent_key"),
-                      nlohmann::detail::type_error);
+                      nlohmann::detail::out_of_range);
 }
 
 TEST_CASE_METHOD(ConfigTestFixture, "Config: get() with missing nested key throws exception",
@@ -243,7 +247,7 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: get() with missing nested key throw
     setup_default_config();
 
     REQUIRE_THROWS_AS(config.get<std::string>(config.df() + "hardware_map/missing"),
-                      nlohmann::detail::type_error);
+                      nlohmann::detail::out_of_range);
 }
 
 TEST_CASE_METHOD(ConfigTestFixture, "Config: get() with type mismatch throws exception",
