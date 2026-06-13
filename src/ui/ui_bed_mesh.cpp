@@ -629,10 +629,22 @@ bool ui_bed_mesh_set_data(lv_obj_t* widget, const float* const* mesh, int rows, 
         return false;
     }
 
-    // Set mesh data in renderer
-    if (!bed_mesh_renderer_set_mesh_data(data->renderer, mesh, rows, cols)) {
-        spdlog::error("[bed_mesh] Failed to set mesh data in renderer");
-        return false;
+    // Set mesh data in renderer.
+    // In async mode, lock the render mutex — the background render thread
+    // iterates renderer->mesh while rendering, and set_mesh_data reallocates
+    // the vectors (use-after-free / OOB read without the lock).
+    {
+        bool ok;
+        if (data->async_mode && data->render_thread) {
+            std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+            ok = bed_mesh_renderer_set_mesh_data(data->renderer, mesh, rows, cols);
+        } else {
+            ok = bed_mesh_renderer_set_mesh_data(data->renderer, mesh, rows, cols);
+        }
+        if (!ok) {
+            spdlog::error("[bed_mesh] Failed to set mesh data in renderer");
+            return false;
+        }
     }
 
     // Reset adaptive quality state since new mesh may render differently
@@ -677,8 +689,15 @@ void ui_bed_mesh_set_bounds(lv_obj_t* widget, double bed_x_min, double bed_x_max
         return;
     }
 
-    bed_mesh_renderer_set_bounds(data->renderer, bed_x_min, bed_x_max, bed_y_min, bed_y_max,
-                                 mesh_x_min, mesh_x_max, mesh_y_min, mesh_y_max);
+    // Lock against the async render thread (same pattern as drag handlers)
+    if (data->async_mode && data->render_thread) {
+        std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+        bed_mesh_renderer_set_bounds(data->renderer, bed_x_min, bed_x_max, bed_y_min, bed_y_max,
+                                     mesh_x_min, mesh_x_max, mesh_y_min, mesh_y_max);
+    } else {
+        bed_mesh_renderer_set_bounds(data->renderer, bed_x_min, bed_x_max, bed_y_min, bed_y_max,
+                                     mesh_x_min, mesh_x_max, mesh_y_min, mesh_y_max);
+    }
 
     // Request redraw to show updated bounds
     ui_bed_mesh_redraw(widget);
@@ -704,8 +723,14 @@ void ui_bed_mesh_set_rotation(lv_obj_t* widget, int angle_x, int angle_z) {
     data->rotation_x = angle_x;
     data->rotation_z = angle_z;
 
-    // Update renderer
-    bed_mesh_renderer_set_rotation(data->renderer, angle_x, angle_z);
+    // Update renderer — lock against the async render thread (same pattern
+    // as the drag handlers)
+    if (data->async_mode && data->render_thread) {
+        std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+        bed_mesh_renderer_set_rotation(data->renderer, angle_x, angle_z);
+    } else {
+        bed_mesh_renderer_set_rotation(data->renderer, angle_x, angle_z);
+    }
 
     spdlog::debug("[bed_mesh] Rotation updated: tilt={}°, spin={}°", angle_x, angle_z);
 

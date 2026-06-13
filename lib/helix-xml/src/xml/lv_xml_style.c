@@ -73,6 +73,10 @@ lv_result_t lv_xml_register_style(lv_xml_component_scope_t * scope, const char *
 
     if(!found) {
         xml_style = lv_ll_ins_tail(&scope->style_ll);
+        if(xml_style == NULL) {
+            LV_LOG_ERROR("OOM: failed to allocate style '%s'", style_name);
+            return LV_RESULT_INVALID;
+        }
         xml_style->name = lv_strdup(style_name);
         lv_style_init(&xml_style->style);
         size_t long_name_len = lv_strlen(scope->name) + 1 + lv_strlen(style_name) + 1;

@@ -922,7 +922,13 @@ static void resolve_params(lv_xml_component_scope_t * item_scope, lv_xml_compone
                 }
                 else if(lv_streq(type, "style")) {
                     lv_xml_style_t * s = lv_xml_get_style_by_name(parent_scope, ext_value);
-                    ext_value = s->long_name;
+                    if(s == NULL) {
+                        LV_LOG_WARN("Style '%s' not found in parent scope", ext_value);
+                        ext_value = NULL;
+                    }
+                    else {
+                        ext_value = s->long_name;
+                    }
                 }
             }
             else {
@@ -1151,6 +1157,11 @@ static void create_timeline_instances(lv_xml_parser_state_t * state)
         LV_ASSERT_MALLOC(my_timeline->user_data);
         if(my_timeline->user_data == NULL) {
             lv_anim_timeline_delete(my_timeline);
+            /* Free already-created timelines before bailing out */
+            for(uint32_t i = 0; i < timeline_index; i++) {
+                lv_free(lv_anim_timeline_get_user_data(timeline_array[i]));
+                lv_anim_timeline_delete(timeline_array[i]);
+            }
             lv_free(timeline_array);
             LV_LOG_WARN("Couldn't allocate memory");
             return;

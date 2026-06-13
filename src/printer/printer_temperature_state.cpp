@@ -144,7 +144,8 @@ void PrinterTemperatureState::init_extruders(const std::vector<std::string>& hea
     for (const auto& name : heaters) {
         // Accept "extruder" and "extruderN" (digit suffix), reject "extruder_stepper" etc.
         if (name == "extruder" ||
-            (name.size() > 8 && name.rfind("extruder", 0) == 0 && std::isdigit(name[8]))) {
+            (name.size() > 8 && name.rfind("extruder", 0) == 0 &&
+             std::isdigit(static_cast<unsigned char>(name[8])))) {
             extruder_names.push_back(name);
         }
     }

@@ -42,6 +42,10 @@ lv_result_t lv_xml_register_widget(const char * name, lv_xml_widget_create_cb_t 
                                    lv_xml_widget_apply_cb_t apply_cb)
 {
     lv_widget_processor_t * p = lv_malloc(sizeof(lv_widget_processor_t));
+    if(p == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate widget processor for '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(p, sizeof(lv_widget_processor_t));
 
     p->name = lv_strdup(name);

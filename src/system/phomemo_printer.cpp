@@ -140,13 +140,17 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
                 }
             }
 
-            helix::ui::queue_update(
-                [callback, success, error]() { callback(success, error); });
+            helix::ui::queue_update([callback, success, error]() {
+                if (callback)
+                    callback(success, error);
+            });
         }).detach();
     } catch (const std::system_error& e) {
         spdlog::error("Phomemo: failed to spawn print thread: {}", e.what());
-        helix::ui::queue_update(
-            [callback]() { callback(false, "System busy — please try again"); });
+        helix::ui::queue_update([callback]() {
+            if (callback)
+                callback(false, "System busy — please try again");
+        });
     }
 }
 

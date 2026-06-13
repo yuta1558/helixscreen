@@ -24,7 +24,7 @@ using helix::json_util::safe_string;
 static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
     SpoolInfo info;
 
-    info.id = spool_json.value("id", 0);
+    info.id = safe_int(spool_json, "id", 0);
     info.remaining_weight_g = safe_double(spool_json, "remaining_weight");
     info.initial_weight_g = safe_double(spool_json, "initial_weight");
     info.spool_weight_g = safe_double(spool_json, "spool_weight");
@@ -45,15 +45,15 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
     if (spool_json.contains("filament") && spool_json["filament"].is_object()) {
         const auto& filament = spool_json["filament"];
 
-        info.filament_id = filament.value("id", 0);
+        info.filament_id = safe_int(filament, "id", 0);
         info.material = safe_string(filament, "material");
         info.color_name = safe_string(filament, "name");
         info.color_hex = safe_string(filament, "color_hex");
         info.multi_color_hexes = safe_string(filament, "multi_color_hexes");
 
-        // Temperature settings
-        info.nozzle_temp_recommended = filament.value("settings_extruder_temp", 0);
-        info.bed_temp_recommended = filament.value("settings_bed_temp", 0);
+        // Temperature settings (Spoolman sends explicit null for unset fields)
+        info.nozzle_temp_recommended = safe_int(filament, "settings_extruder_temp", 0);
+        info.bed_temp_recommended = safe_int(filament, "settings_bed_temp", 0);
 
         // Fallback: use filament definition weight when spool initial_weight is null/0.
         // Spoolman's initial_weight is optional; filament.weight is the canonical
@@ -65,7 +65,7 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
         // Nested vendor
         if (filament.contains("vendor") && filament["vendor"].is_object()) {
             info.vendor = safe_string(filament["vendor"], "name");
-            info.vendor_id = filament["vendor"].value("id", 0);
+            info.vendor_id = safe_int(filament["vendor"], "id", 0);
         }
     }
 
@@ -79,7 +79,7 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
 
 static VendorInfo parse_vendor_info(const nlohmann::json& vendor_json) {
     VendorInfo info;
-    info.id = vendor_json.value("id", 0);
+    info.id = safe_int(vendor_json, "id", 0);
     info.name = safe_string(vendor_json, "name");
     info.url = safe_string(vendor_json, "url");
     return info;
@@ -105,7 +105,7 @@ static FilamentInfo parse_filament_info(const nlohmann::json& filament_json) {
 
     // Nested vendor object (may override vendor_id, adds vendor_name)
     if (filament_json.contains("vendor") && filament_json["vendor"].is_object()) {
-        info.vendor_id = filament_json["vendor"].value("id", info.vendor_id);
+        info.vendor_id = safe_int(filament_json["vendor"], "id", info.vendor_id);
         info.vendor_name = safe_string(filament_json["vendor"], "name");
     }
 

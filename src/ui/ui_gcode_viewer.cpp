@@ -1232,7 +1232,9 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
     if (st->loading_container) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        helix::ui::safe_delete(st->loading_container);
+        // This function can run inside a queue_update() batch (download-complete
+        // path) — sync deletion here risks event-list corruption (#776).
+        helix::ui::safe_delete_deferred(st->loading_container);
         st->loading_container = nullptr;
         st->loading_spinner = nullptr;
         st->loading_label = nullptr;

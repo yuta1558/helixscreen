@@ -1268,11 +1268,21 @@ void Config::init(const std::string& config_path) {
         }
     }
 
-    // Save updated config with any new defaults or migrations
+    // Save updated config with any new defaults or migrations.
+    // Use the atomic temp+rename path — a truncating write directly to the
+    // live config would corrupt it on power loss mid-write at every boot.
+    // Deliberately NOT Config::save(): that also writes the rolling backup,
+    // which must stay skipped while the wizard is required (see below).
     if (config_modified && !read_only_mode_) {
-        std::ofstream o(path);
-        o << std::setw(2) << data << std::endl;
-        spdlog::debug("[Config] Saved updated config to {}", path);
+        try {
+            if (save_to_disk()) {
+                spdlog::debug("[Config] Saved updated config to {}", path);
+            } else {
+                spdlog::warn("[Config] Failed to persist migrated config to {}", path);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("[Config] Failed to persist migrated config: {}", e.what());
+        }
     }
 
     // Maintain a rolling backup on startup — ensures backup freshness even if
@@ -1422,20 +1432,7 @@ static std::string errno_reason(int err) {
     }
 }
 
-bool Config::save() {
-    if (path.empty()) {
-        spdlog::trace("[Config] Skipping save (no config path set)");
-        return true;
-    }
-
-    if (read_only_mode_) {
-        spdlog::warn("[Config] Skipping save — filesystem is read-only");
-        return false;
-    }
-
-    spdlog::trace("[Config] Saving config to {}", path);
-
-    try {
+bool Config::save_to_disk() {
         // Resolve symlinks so atomic rename targets the real file, not the symlink
         std::string target_path = path;
         {
@@ -1488,6 +1485,26 @@ bool Config::save() {
         }
 
         spdlog::trace("[Config] saved successfully to {}", path);
+        return true;
+}
+
+bool Config::save() {
+    if (path.empty()) {
+        spdlog::trace("[Config] Skipping save (no config path set)");
+        return true;
+    }
+
+    if (read_only_mode_) {
+        spdlog::warn("[Config] Skipping save — filesystem is read-only");
+        return false;
+    }
+
+    spdlog::trace("[Config] Saving config to {}", path);
+
+    try {
+        if (!save_to_disk()) {
+            return false;
+        }
 
         // Maintain rolling backup outside install dir (survives Moonraker wipes)
         write_rolling_backup(path, CONFIG_BACKUP_PRIMARY, config_backup_fallback());

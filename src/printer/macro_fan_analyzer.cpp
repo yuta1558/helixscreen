@@ -58,16 +58,25 @@ void MacroFanAnalyzer::extract_set_pin_fans(const std::string& gcode,
     size_t pos = 0;
     while ((pos = gcode.find(needle, pos)) != std::string::npos) {
         size_t digit_start = pos + needle.size();
-        if (digit_start >= gcode.size() || !std::isdigit(gcode[digit_start])) {
+        if (digit_start >= gcode.size() ||
+            !std::isdigit(static_cast<unsigned char>(gcode[digit_start]))) {
             pos = digit_start;
             continue;
         }
         // Extract digits
         size_t digit_end = digit_start;
-        while (digit_end < gcode.size() && std::isdigit(gcode[digit_end])) {
+        while (digit_end < gcode.size() &&
+               std::isdigit(static_cast<unsigned char>(gcode[digit_end]))) {
             digit_end++;
         }
-        int index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
+        int index = 0;
+        try {
+            index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
+        } catch (const std::exception& e) {
+            spdlog::debug("[MacroFanAnalyzer] Skipping fan index parse failure: {}", e.what());
+            pos = digit_end;
+            continue;
+        }
         std::string obj_name = "output_pin fan" + std::to_string(index);
         result.fan_indices[obj_name] = index;
         pos = digit_end;
@@ -82,15 +91,24 @@ void MacroFanAnalyzer::extract_m141_roles(const std::string& gcode,
     size_t pos = 0;
     while ((pos = gcode.find(needle, pos)) != std::string::npos) {
         size_t digit_start = pos + needle.size();
-        if (digit_start >= gcode.size() || !std::isdigit(gcode[digit_start])) {
+        if (digit_start >= gcode.size() ||
+            !std::isdigit(static_cast<unsigned char>(gcode[digit_start]))) {
             pos = digit_start;
             continue;
         }
         size_t digit_end = digit_start;
-        while (digit_end < gcode.size() && std::isdigit(gcode[digit_end])) {
+        while (digit_end < gcode.size() &&
+               std::isdigit(static_cast<unsigned char>(gcode[digit_end]))) {
             digit_end++;
         }
-        int index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
+        int index = 0;
+        try {
+            index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
+        } catch (const std::exception& e) {
+            spdlog::debug("[MacroFanAnalyzer] Skipping role index parse failure: {}", e.what());
+            pos = digit_end;
+            continue;
+        }
         std::string obj_name = "output_pin fan" + std::to_string(index);
         result.role_hints[obj_name] = "Chamber Exhaust";
         pos = digit_end;

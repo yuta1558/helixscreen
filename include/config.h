@@ -64,6 +64,16 @@ class Config {
     std::string active_printer_id_; ///< Currently active printer slug ID
     bool read_only_mode_ = false;   ///< Config directory is on a read-only filesystem
 
+    /**
+     * @brief Atomically write current config data to disk (temp file + rename)
+     *
+     * Shared by save() and the startup migration save. Does NOT write the
+     * rolling backup — callers decide whether a backup is appropriate.
+     *
+     * @return true if the write succeeded, false on error
+     */
+    bool save_to_disk();
+
   protected:
     json data;
 
@@ -129,13 +139,18 @@ class Config {
      * @throws nlohmann::json::exception if path not found
      */
     template <typename T> T get(const std::string& json_ptr) {
-        return data[json::json_pointer(json_ptr)].template get<T>();
+        // Use a const reference so a missing path throws (not_found) rather
+        // than silently inserting a null node into the config document.
+        const json& cdata = data;
+        return cdata.at(json::json_pointer(json_ptr)).template get<T>();
     };
 
     /**
      * @brief Get configuration value with default fallback
      *
-     * Safe accessor that returns default_value if path doesn't exist.
+     * Safe accessor that returns default_value if path doesn't exist or if
+     * the stored value cannot be converted to T (e.g., hand-edited config
+     * with the wrong type).
      *
      * @tparam T Value type to retrieve
      * @param json_ptr JSON pointer path (e.g., "/printer/moonraker_host")
@@ -144,8 +159,21 @@ class Config {
      */
     template <typename T> T get(const std::string& json_ptr, const T& default_value) {
         json::json_pointer ptr(json_ptr);
-        if (data.contains(ptr) && !data[ptr].is_null()) {
-            return data[ptr].template get<T>();
+        // Use a const reference so a missing path returns the default rather
+        // than silently inserting a null node into the config document.
+        const json& cdata = data;
+        if (cdata.contains(ptr)) {
+            const json& val = cdata[ptr];
+            if (val.is_null()) {
+                return default_value;
+            }
+            try {
+                return val.template get<T>();
+            } catch (const json::exception&) {
+                // Stored value has an unexpected type (e.g., hand-edited config).
+                // Return the default silently rather than crashing.
+                return default_value;
+            }
         }
         return default_value;
     };

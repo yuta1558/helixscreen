@@ -5,6 +5,7 @@
 
 #include "theme_manager.h"
 #include "ui_button.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -32,8 +33,12 @@ TourOverlay::TourOverlay(std::vector<TourStep> steps, AdvanceCb on_next, SkipCb 
 
 TourOverlay::~TourOverlay() {
     if (root_) {
-        lv_obj_delete(root_); // full-screen overlay, not owned by any panel
-        root_ = nullptr;
+        // The overlay is torn down from inside its own buttons' CLICKED
+        // handlers (skip/next) and from observer callbacks (UpdateQueue
+        // batches) — synchronous lv_obj_delete in either context corrupts
+        // LVGL's event/indev traversal (#776). Deferred delete detaches the
+        // tree immediately and frees it on the next timer tick.
+        helix::ui::safe_delete_deferred(root_); // full-screen overlay, not owned by any panel
     }
 }
 

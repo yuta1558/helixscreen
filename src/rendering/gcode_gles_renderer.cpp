@@ -1343,7 +1343,7 @@ void GCodeGLESRenderer::blit_to_lvgl(lv_layer_t* layer, const lv_area_t* widget_
 
     // Read RGBA from GPU (matches GL_RGBA8_OES renderbuffer format)
     // Reuse persistent readback buffer to avoid per-frame allocation
-    size_t readback_size = static_cast<size_t>(fbo_width_ * fbo_height_ * 4);
+    size_t readback_size = static_cast<size_t>(fbo_width_) * static_cast<size_t>(fbo_height_) * 4u;
     if (readback_buf_.size() != readback_size) {
         readback_buf_.resize(readback_size);
     }
@@ -1367,7 +1367,7 @@ void GCodeGLESRenderer::blit_to_lvgl(lv_layer_t* layer, const lv_area_t* widget_
     for (int dy = 0; dy < widget_h; ++dy) {
         int sy = needs_scale ? (dy * fbo_height_ / widget_h) : dy;
         int gl_row = fbo_height_ - 1 - sy;
-        const auto* src_row = src + static_cast<size_t>(gl_row * fbo_width_) * 4;
+        const auto* src_row = src + static_cast<size_t>(gl_row) * static_cast<size_t>(fbo_width_) * 4u;
         auto* dst_row = dest + static_cast<size_t>(dy) * dst_stride;
 
         if (needs_scale) {

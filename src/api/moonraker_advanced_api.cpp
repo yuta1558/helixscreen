@@ -1862,26 +1862,34 @@ void MoonrakerAdvancedAPI::get_input_shaper_config(InputShaperConfigCallback on_
                     config.shaper_type_x = shaper.value("shaper_type_x", "");
                     config.shaper_type_y = shaper.value("shaper_type_y", "");
 
-                    // configfile returns frequencies as strings
+                    // configfile returns frequencies as strings; null means unset — skip
                     if (shaper.contains("shaper_freq_x")) {
-                        auto& val = shaper["shaper_freq_x"];
-                        config.shaper_freq_x =
-                            val.is_string() ? std::stof(val.get<std::string>()) : val.get<float>();
+                        const auto& val = shaper["shaper_freq_x"];
+                        if (val.is_string())
+                            config.shaper_freq_x = std::stof(val.get<std::string>());
+                        else if (val.is_number())
+                            config.shaper_freq_x = val.get<float>();
                     }
                     if (shaper.contains("shaper_freq_y")) {
-                        auto& val = shaper["shaper_freq_y"];
-                        config.shaper_freq_y =
-                            val.is_string() ? std::stof(val.get<std::string>()) : val.get<float>();
+                        const auto& val = shaper["shaper_freq_y"];
+                        if (val.is_string())
+                            config.shaper_freq_y = std::stof(val.get<std::string>());
+                        else if (val.is_number())
+                            config.shaper_freq_y = val.get<float>();
                     }
                     if (shaper.contains("damping_ratio_x")) {
-                        auto& val = shaper["damping_ratio_x"];
-                        config.damping_ratio_x =
-                            val.is_string() ? std::stof(val.get<std::string>()) : val.get<float>();
+                        const auto& val = shaper["damping_ratio_x"];
+                        if (val.is_string())
+                            config.damping_ratio_x = std::stof(val.get<std::string>());
+                        else if (val.is_number())
+                            config.damping_ratio_x = val.get<float>();
                     }
                     if (shaper.contains("damping_ratio_y")) {
-                        auto& val = shaper["damping_ratio_y"];
-                        config.damping_ratio_y =
-                            val.is_string() ? std::stof(val.get<std::string>()) : val.get<float>();
+                        const auto& val = shaper["damping_ratio_y"];
+                        if (val.is_string())
+                            config.damping_ratio_y = std::stof(val.get<std::string>());
+                        else if (val.is_number())
+                            config.damping_ratio_y = val.get<float>();
                     }
 
                     // Input shaper is configured if at least one axis has a type set

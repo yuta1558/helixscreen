@@ -882,6 +882,10 @@ uint32_t AmsBackendAce::parse_slot_color(const json& color_val) {
 // ============================================================================
 
 void AmsBackendAce::start_rest_fallback() {
+    if (use_rest_fallback_ || rest_polling_thread_.joinable()) {
+        spdlog::debug("[ACE] start_rest_fallback: already running, ignoring re-entry");
+        return;
+    }
     use_rest_fallback_ = true;
     rest_stop_requested_.store(false);
     rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);

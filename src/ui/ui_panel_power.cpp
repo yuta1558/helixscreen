@@ -144,9 +144,11 @@ void PowerPanel::fetch_devices() {
 }
 
 void PowerPanel::clear_device_list() {
-    // Remove all device row widgets
+    // Remove all device row widgets. populate_device_list() runs inside
+    // token.defer() (UpdateQueue batch) — sync deletion here corrupts LVGL's
+    // event list (#776), same hardening as populate_device_chips().
     for (auto& row : device_rows_) {
-        helix::ui::safe_delete(row.container);
+        helix::ui::safe_delete_deferred(row.container);
     }
     device_rows_.clear();
 }

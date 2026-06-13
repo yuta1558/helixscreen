@@ -93,7 +93,7 @@ void JobQueueState::fetch() {
             is_fetching_.store(false);
             if (token.expired())
                 return;
-            on_queue_fetched(status);
+            on_queue_fetched(status, token);
         },
         [this, token](const MoonrakerError& err) {
             is_fetching_.store(false);
@@ -103,13 +103,14 @@ void JobQueueState::fetch() {
         });
 }
 
-void JobQueueState::on_queue_fetched(const JobQueueStatus& status) {
+void JobQueueState::on_queue_fetched(const JobQueueStatus& status,
+                                     const helix::LifetimeToken& token) {
     // Thread safety: API callbacks may fire on background thread.
-    // Use queue_update to marshal onto the LVGL main thread.
-    // Guard must be captured into the lambda to prevent use-after-free
-    // if JobQueueState is destroyed before the queued update executes.
+    // Use token.defer() (NOT lifetime_.defer()) — accessing this->lifetime_ from
+    // the BG thread is a TOCTOU race if JobQueueState is destroyed between the
+    // expired() check and the defer (#707). The token holds its own shared_ptr.
     // is_fetching_ was cleared on the BG thread before this defer was posted.
-    lifetime_.defer("JobQueueState::on_queue_fetched", [this, status]() {
+    token.defer("JobQueueState::on_queue_fetched", [this, status]() {
         cached_jobs_ = status.queued_jobs;
         queue_state_ = status.queue_state;
         is_loaded_ = true;

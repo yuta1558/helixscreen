@@ -731,12 +731,21 @@ void PowerDeviceWidget::show_device_picker() {
                     auto* self = PowerDeviceWidget::s_active_picker_;
                     std::string new_sensor = *id_ptr;
 
-                    // Teardown old carousel, update sensor, setup new one
-                    self->teardown_carousel();
-                    self->sensor_id_ = new_sensor;
-                    self->save_config();
-                    self->setup_carousel();
+                    // Dismiss the picker immediately (safe — uses safe_delete_deferred)
                     self->dismiss_device_picker();
+
+                    // Defer teardown+rebuild: lv_obj_delete is banned inside
+                    // LV_EVENT_CLICKED handlers (LVGL may be iterating the child
+                    // list during indev_proc_release). lifetime_.defer() is safe
+                    // from the main thread; inside the batch we pass
+                    // deferred_delete=true so teardown_carousel uses
+                    // safe_delete_deferred instead of lv_obj_delete (#776).
+                    self->lifetime_.defer([self, new_sensor]() {
+                        self->teardown_carousel(/*deferred_delete=*/true);
+                        self->sensor_id_ = new_sensor;
+                        self->save_config();
+                        self->setup_carousel();
+                    });
                     LVGL_SAFE_EVENT_CB_END();
                 },
                 LV_EVENT_CLICKED, nullptr);
@@ -1130,7 +1139,7 @@ void PowerDeviceWidget::setup_carousel() {
     spdlog::debug("[PowerDeviceWidget] Carousel setup complete for sensor '{}'", sensor_id_);
 }
 
-void PowerDeviceWidget::teardown_carousel() {
+void PowerDeviceWidget::teardown_carousel(bool deferred_delete) {
     detach_sensor_observers();
 
     if (carousel_ && widget_obj_) {
@@ -1156,7 +1165,13 @@ void PowerDeviceWidget::teardown_carousel() {
             }
         }
 
-        lv_obj_delete(carousel_);
+        // When called from inside an UpdateQueue batch (deferred_delete == true),
+        // lv_obj_delete is banned — use the async-safe variant instead (#776).
+        if (deferred_delete) {
+            helix::ui::safe_delete_deferred(carousel_);
+        } else {
+            lv_obj_delete(carousel_);
+        }
     }
 
     energy_page_ = nullptr;

@@ -820,7 +820,9 @@ void ConsolePanel::add_entry(const GcodeEntry& entry) {
         if (first_child == empty_state_) {
             first_child = lv_obj_get_child(console_container_, 1);
         }
-        helix::ui::safe_delete(first_child);
+        // add_entry() runs inside tok.defer() (UpdateQueue batch) — sync deletion
+        // here corrupts LVGL's event list under high console throughput (#776).
+        helix::ui::safe_delete_deferred(first_child);
     }
 
     // Create widget for new entry

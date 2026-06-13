@@ -69,6 +69,12 @@ static lv_ll_t component_scope_ll;
  **********************/
 
 /**********************
+ * STATIC PROTOTYPES
+ **********************/
+
+static void free_scope_lists(lv_xml_component_scope_t * scope);
+
+/**********************
  *   GLOBAL FUNCTIONS
  **********************/
 
@@ -169,7 +175,7 @@ lv_result_t lv_xml_register_component_from_data(const char * name, const char * 
                      XML_ErrorString(XML_GetErrorCode(parser)),
                      (unsigned long)XML_GetCurrentLineNumber(parser));
         XML_ParserFree(parser);
-        lv_free((char *)state.scope.extends);
+        free_scope_lists(&state.scope);
         return LV_RESULT_INVALID;
     }
 
@@ -185,6 +191,7 @@ lv_result_t lv_xml_register_component_from_data(const char * name, const char * 
         lv_xml_component_scope_t * scope = lv_ll_ins_head(&component_scope_ll);
         if(scope == NULL) {
             LV_LOG_ERROR("OOM: failed to register component '%s'", name);
+            free_scope_lists(&state.scope);
             return LV_RESULT_INVALID;
         }
         lv_memzero(scope, sizeof(lv_xml_component_scope_t));
@@ -354,6 +361,88 @@ lv_result_t lv_xml_component_unregister(const char * name)
  *   STATIC FUNCTIONS
  **********************/
 
+/**
+ * Free all heap-allocated data inside a scope's linked lists without
+ * removing the scope itself from any list or freeing the scope pointer.
+ * Used on error paths for temporary (unregistered) scopes.
+ */
+static void free_scope_lists(lv_xml_component_scope_t * scope)
+{
+    lv_free((char *)scope->extends);
+    scope->extends = NULL;
+
+    lv_xml_const_t * cnst;
+    LV_LL_READ(&scope->const_ll, cnst) {
+        lv_free((char *)cnst->name);
+        lv_free((char *)cnst->value);
+    }
+    lv_ll_clear(&scope->const_ll);
+
+    lv_xml_param_t * param;
+    LV_LL_READ(&scope->param_ll, param) {
+        lv_free((char *)param->name);
+        lv_free((char *)param->def);
+        lv_free((char *)param->type);
+    }
+    lv_ll_clear(&scope->param_ll);
+
+    lv_xml_font_t * font;
+    LV_LL_READ(&scope->font_ll, font) {
+        lv_free((char *)font->name);
+    }
+    lv_ll_clear(&scope->font_ll);
+
+    lv_xml_image_t * image;
+    LV_LL_READ(&scope->image_ll, image) {
+        lv_free((char *)image->name);
+        lv_free((char *)image->src);
+    }
+    lv_ll_clear(&scope->image_ll);
+
+    lv_xml_style_t * style;
+    LV_LL_READ(&scope->style_ll, style) {
+        lv_free((char *)style->name);
+        lv_free((char *)style->long_name);
+        lv_style_reset(&style->style);
+    }
+    lv_ll_clear(&scope->style_ll);
+
+    lv_xml_grad_t * grad;
+    LV_LL_READ(&scope->gradient_ll, grad) {
+        lv_free((char *)grad->name);
+    }
+    lv_ll_clear(&scope->gradient_ll);
+
+    lv_xml_subject_t * subject;
+    LV_LL_READ(&scope->subjects_ll, subject) {
+        lv_free((char *)subject->name);
+        if(subject->subject->type == LV_SUBJECT_TYPE_STRING) {
+            lv_free((char *)subject->subject->prev_value.pointer);
+            lv_free((char *)subject->subject->value.pointer);
+        }
+        lv_free(subject->subject);
+    }
+    lv_ll_clear(&scope->subjects_ll);
+
+    lv_xml_timeline_t * timeline;
+    LV_LL_READ(&scope->timeline_ll, timeline) {
+        lv_xml_anim_timeline_child_t * child;
+        LV_LL_READ(&timeline->anims_ll, child) {
+            if(child->is_anim) {
+                lv_free(child->data.anim.user_data);
+                lv_free(child->data.anim.var);
+            }
+            else {
+                lv_free((void *)child->data.incl.target_name);
+                lv_free((void *)child->data.incl.timeline_name);
+            }
+        }
+        lv_ll_clear(&timeline->anims_ll);
+        lv_free((char *)timeline->name);
+    }
+    lv_ll_clear(&scope->timeline_ll);
+}
+
 static void process_const_element(lv_xml_parser_state_t * state, const char ** attrs)
 {
     const char * name = lv_xml_get_value_of(attrs, "name");
@@ -520,7 +609,18 @@ static void process_subject_element(lv_xml_parser_state_t * state, const char * 
     else if(lv_streq(type, "string")) {
         /*Simple solution for now. Will be improved later*/
         char * buf_prev = lv_malloc(256);
+        if(buf_prev == NULL) {
+            LV_LOG_ERROR("OOM: failed to allocate string subject buffer (prev) for '%s'", name);
+            lv_free(subject);
+            return;
+        }
         char * buf_act = lv_malloc(256);
+        if(buf_act == NULL) {
+            LV_LOG_ERROR("OOM: failed to allocate string subject buffer (act) for '%s'", name);
+            lv_free(buf_prev);
+            lv_free(subject);
+            return;
+        }
         lv_subject_init_string(subject, buf_act, buf_prev, 256, value);
     }
 
@@ -635,6 +735,11 @@ static void process_animation_element(lv_xml_parser_state_t * state, const char 
     lv_anim_t * a = &child->data.anim;
 
     anim_data_t * anim_data = lv_malloc(sizeof(anim_data_t));
+    if(anim_data == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate anim_data");
+        lv_ll_remove(&at->anims_ll, child);
+        return;
+    }
     anim_data->selector = selector;
     anim_data->prop = prop;
     anim_data->prop_type = prop_type;
@@ -724,6 +829,12 @@ static void process_include_timeline_element(lv_xml_parser_state_t * state, cons
 
 static void process_grad_element(lv_xml_parser_state_t * state, const char * tag_name, const char ** attrs)
 {
+    const char * grad_name = lv_xml_get_value_of(attrs, "name");
+    if(grad_name == NULL) {
+        LV_LOG_WARN("'name' is missing from gradient element");
+        return;
+    }
+
     lv_xml_grad_t * grad = lv_ll_ins_tail(&state->scope.gradient_ll);
     if(grad == NULL) {
         LV_LOG_ERROR("OOM: failed to allocate gradient");
@@ -731,7 +842,7 @@ static void process_grad_element(lv_xml_parser_state_t * state, const char * tag
     }
     lv_memzero(grad, sizeof(lv_xml_grad_t));
 
-    grad->name = lv_strdup(lv_xml_get_value_of(attrs, "name"));
+    grad->name = lv_strdup(grad_name);
     lv_grad_dsc_t * dsc = &grad->grad_dsc;
     lv_memzero(dsc, sizeof(lv_grad_dsc_t));
     dsc->extend = LV_GRAD_EXTEND_PAD;
@@ -741,12 +852,20 @@ static void process_grad_element(lv_xml_parser_state_t * state, const char * tag
         char buf[64];
         char * buf_p = buf;
         const char * start = lv_xml_get_value_of(attrs, "start");
+        if(start == NULL) {
+            LV_LOG_WARN("'start' is missing from linear gradient '%s', using default '0%% 0%%'", grad_name);
+            start = "0% 0%";
+        }
         lv_strlcpy(buf, start, sizeof(buf));
         dsc->params.linear.start.x = lv_xml_to_size(lv_xml_split_str(&buf_p, ' '));
         dsc->params.linear.start.y = lv_xml_to_size(buf_p);
 
         buf_p = buf;
         const char * end = lv_xml_get_value_of(attrs, "end");
+        if(end == NULL) {
+            LV_LOG_WARN("'end' is missing from linear gradient '%s', using default '100%% 100%%'", grad_name);
+            end = "100% 100%";
+        }
         lv_strlcpy(buf, end, sizeof(buf));
         dsc->params.linear.end.x = lv_xml_to_size(lv_xml_split_str(&buf_p, ' '));
         dsc->params.linear.end.y = lv_xml_to_size(buf_p);
@@ -886,6 +1005,12 @@ static void process_prop_element(lv_xml_parser_state_t * state, const char * nam
 {
     if(!lv_streq(name, "prop")) return;
 
+    const char * prop_name = lv_xml_get_value_of(attrs, "name");
+    if(prop_name == NULL) {
+        LV_LOG_WARN("'name' is missing from prop element");
+        return;
+    }
+
     lv_xml_param_t * prop = lv_ll_ins_tail(&state->scope.param_ll);
     if(prop == NULL) {
         LV_LOG_ERROR("OOM: failed to allocate prop");
@@ -893,7 +1018,7 @@ static void process_prop_element(lv_xml_parser_state_t * state, const char * nam
     }
     lv_memzero(prop, sizeof(lv_xml_param_t));
 
-    prop->name = lv_strdup(lv_xml_get_value_of(attrs, "name"));
+    prop->name = lv_strdup(prop_name);
     const char * def = lv_xml_get_value_of(attrs, "default");
     if(def) prop->def = lv_strdup(def);
     else prop->def = NULL;

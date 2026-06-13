@@ -2,6 +2,8 @@
 
 #include "bt_bus_thread.h"
 
+#include <spdlog/spdlog.h>
+
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
@@ -29,14 +31,22 @@ void BusThread::start() {
     if (!running_.compare_exchange_strong(expected, true))
         return;
     stopping_.store(false);
-    thread_ = std::thread([this]{
-        // Publish our id from inside the worker BEFORE any work runs, so
-        // on_thread() always sees a valid id — the parent thread used to
-        // write thread_id_ after std::thread construction, which races the
-        // worker's first on_thread() check.
-        thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
-        loop();
-    });
+    try {
+        thread_ = std::thread([this]{
+            // Publish our id from inside the worker BEFORE any work runs, so
+            // on_thread() always sees a valid id — the parent thread used to
+            // write thread_id_ after std::thread construction, which races the
+            // worker's first on_thread() check.
+            thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
+            loop();
+        });
+    } catch (const std::system_error& e) {
+        running_.store(false);
+        stopping_.store(true);
+        spdlog::error("[BusThread] Failed to start bus thread ({}): {}",
+                      e.code().value(), e.what());
+        return;
+    }
 }
 
 void BusThread::stop() {
